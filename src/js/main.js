@@ -1,4 +1,7 @@
-const API_KEY = "44e79bb02c9546f499bac9897bf496b4"; // вставь свой ключ здесь
+// ============================
+//  THE NEWS API CONFIG
+// ============================
+const API_KEY = "nRcMF8e2o4SHGIA89GSACRyre3vi1T2EYorIbzUO"; // вставь свой ключ
 const PER_PAGE = 12;
 const FALLBACK_QUERY = 'новости';
 const OBSERVER_MARGIN = '400px';
@@ -39,7 +42,7 @@ renderTags();
 render();
 
 // ============================
-//  FETCH NEWS FROM NEWSAPI
+//  FETCH NEWS FROM THENEWSAPI
 // ============================
 async function fetchNews({ reset = false } = {}) {
     if (isLoading) return;
@@ -57,42 +60,33 @@ async function fetchNews({ reset = false } = {}) {
     setLoader(true);
     updateStatus();
 
-    const params = new URLSearchParams({
-        language: 'ru',
-        pageSize: String(PER_PAGE),
-        page: String(apiPage),
-        sortBy: 'publishedAt'
-    });
-
-    const searchQuery = buildSearchQuery();
-    params.set('q', searchQuery);
-
-    const url = `https://newsapi.org/v2/everything?${params.toString()}`;
+    const searchQuery = buildSearchQuery() || FALLBACK_QUERY;
+    const url = new URL('https://api.thenewsapi.com/v1/news/all');
+    url.searchParams.set('api_token', API_KEY);
+    url.searchParams.set('language', 'ru');
+    url.searchParams.set('search', searchQuery);
+    url.searchParams.set('page', String(apiPage));
+    url.searchParams.set('limit', String(PER_PAGE));
 
     try {
-        const res = await fetch(url, {
-            headers: {
-                'X-Api-Key': API_KEY
-            }
-        });
-
+        const res = await fetch(url);
         if (!res.ok) {
-            const errorBody = await res.json().catch(() => ({}));
-            throw new Error(errorBody.message || `HTTP ${res.status}`);
+            const errBody = await res.json().catch(() => ({}));
+            throw new Error(errBody.message || `HTTP ${res.status}`);
         }
 
         const data = await res.json();
         const startIndex = articles.length;
-        const incoming = (data.articles || []).map((a, i) => ({
+        const incoming = (data.data || []).map((a, i) => ({
             id: startIndex + i,
             title: a.title || '(без заголовка)',
             desc: a.description || '',
-            date: a.publishedAt || '',
-            source: a.source?.name || '',
+            date: a.published_at || '',
+            source: a.source || '',
             url: a.url,
-            image: a.urlToImage || '',
-            tags: a.author ? [a.author] : [],
-            content: a.content || ''
+            image: a.image_url || '',
+            tags: a.categories || [],
+            content: a.snippet || ''
         }));
 
         articles = reset ? incoming : articles.concat(incoming);
