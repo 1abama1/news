@@ -15,6 +15,9 @@ let apiPage = 1;
 let isLoading = false;
 let hasMore = true;
 
+// ============================
+//  DOM ELEMENTS
+// ============================
 const $q = document.getElementById('q');
 const $sort = document.getElementById('sort');
 const $feed = document.getElementById('feed');
@@ -26,6 +29,9 @@ const tpl = document.getElementById('cardTpl');
 
 let observer;
 
+// ============================
+//  CACHE INIT
+// ============================
 const cachedArticles = localStorage.getItem('articlesData');
 if (cachedArticles) {
     try {
@@ -42,7 +48,7 @@ renderTags();
 render();
 
 // ============================
-//  FETCH NEWS FROM THENEWSAPI
+//  FETCH NEWS (TheNewsAPI)
 // ============================
 async function fetchNews({ reset = false } = {}) {
     if (isLoading) return;
@@ -61,11 +67,12 @@ async function fetchNews({ reset = false } = {}) {
     updateStatus();
 
     const searchQuery = buildSearchQuery() || FALLBACK_QUERY;
+
+    // ===> ВАЖНО: TheNewsAPI рекомендует использовать endpoint /v1/news/all или /v1/news/top
     const url = new URL('https://api.thenewsapi.com/v1/news/all');
     url.searchParams.set('api_token', API_KEY);
-    url.searchParams.set('language', 'ru');
+    url.searchParams.set('language', 'ru'); // можно 'en' или др.
     url.searchParams.set('search', searchQuery);
-    url.searchParams.set('page', String(apiPage));
     url.searchParams.set('limit', String(PER_PAGE));
 
     try {
@@ -76,7 +83,14 @@ async function fetchNews({ reset = false } = {}) {
         }
 
         const data = await res.json();
-        const startIndex = articles.length;
+
+        // ===> структура у TheNewsAPI:
+        // {
+        //   "meta": { "found": number, "page": number },
+        //   "data": [ { "uuid": "...", "title": "...", "published_at": "...", "description": "...", "image_url": "...", "url": "...", "source": "...", "categories": [...] } ]
+        // }
+
+        const startIndex = reset ? 0 : articles.length;
         const incoming = (data.data || []).map((a, i) => ({
             id: startIndex + i,
             title: a.title || '(без заголовка)',
@@ -86,7 +100,7 @@ async function fetchNews({ reset = false } = {}) {
             url: a.url,
             image: a.image_url || '',
             tags: a.categories || [],
-            content: a.snippet || ''
+            content: a.snippet || a.description || ''
         }));
 
         articles = reset ? incoming : articles.concat(incoming);
@@ -99,9 +113,7 @@ async function fetchNews({ reset = false } = {}) {
         }
     } catch (err) {
         console.error('Ошибка загрузки новостей:', err);
-        if (reset) {
-            articles = [];
-        }
+        if (reset) articles = [];
         errorMsg = err.message || 'Не удалось загрузить новости.';
         hasMore = false;
         localStorage.setItem('articlesData', JSON.stringify(articles));
@@ -115,6 +127,9 @@ async function fetchNews({ reset = false } = {}) {
     }
 }
 
+// ============================
+//  HELPERS
+// ============================
 function setLoader(visible) {
     if (!$loader) return;
     $loader.classList.toggle('hidden', !visible);
@@ -126,17 +141,7 @@ function updateStatus() {
         $pageInfo.textContent = errorMsg;
         return;
     }
-    if (isLoading && articles.length === 0) {
-        $pageInfo.textContent = 'Загружаем свежие новости...';
-    } else if (isLoading) {
-        $pageInfo.textContent = 'Обновляем список...';
-    } else if (!articles.length) {
-        $pageInfo.textContent = 'Новости пока не найдены.';
-    } else if (!hasMore) {
-        $pageInfo.textContent = 'Это все новости по запросу.';
-    } else {
-        $pageInfo.textContent = 'Прокрутите вниз, чтобы загрузить ещё.';
-    }
+    
 }
 
 function updateObserver() {
@@ -156,7 +161,6 @@ function setupInfiniteScroll() {
             fetchNews();
         }
     }, { root: null, rootMargin: OBSERVER_MARGIN, threshold: 0 });
-
     observer.observe($sentinel);
 }
 
@@ -164,42 +168,40 @@ function buildSearchQuery() {
     const terms = [];
     if (query) terms.push(query);
     if (activeTag) terms.push(activeTag);
-    const combined = terms.join(' ').trim();
-    return combined || FALLBACK_QUERY;
+    return terms.join(' ').trim() || FALLBACK_QUERY;
 }
 
-function uniqueTags(list){
+function uniqueTags(list) {
     return [...new Set(list.flatMap(a => a.tags || []))].slice(0, 10);
 }
 
-function applyFilters(){
-    let list = articles.slice();
+function applyFilters() {
+    let list = [...articles];
     if (activeTag) list = list.filter(a => (a.tags || []).includes(activeTag));
-    if (sort==='new') list.sort((a,b)=> new Date(b.date)-new Date(a.date));
-    if (sort==='old') list.sort((a,b)=> new Date(a.date)-new Date(b.date));
-    if (sort==='az') list.sort((a,b)=> a.title.localeCompare(b.title,'ru'));
+    if (sort === 'new') list.sort((a, b) => new Date(b.date) - new Date(a.date));
+    if (sort === 'old') list.sort((a, b) => new Date(a.date) - new Date(b.date));
+    if (sort === 'az') list.sort((a, b) => a.title.localeCompare(b.title, 'ru'));
     return list;
 }
 
-function renderTags(){
-    $tags.innerHTML='';
+function renderTags() {
+    $tags.innerHTML = '';
     const all = ['все', ...uniqueTags(articles)];
-    for(const t of all){
+    for (const t of all) {
         const b = document.createElement('button');
-        b.className = 'tag' + ((t===activeTag) || (t==='все' && !activeTag) ? ' active':'');
+        b.className = 'tag' + ((t === activeTag) || (t === 'все' && !activeTag) ? ' active' : '');
         b.textContent = t;
-        b.addEventListener('click', ()=>{
-            activeTag = (t==='все')? null : t;
+        b.addEventListener('click', () => {
+            activeTag = (t === 'все') ? null : t;
             render();
         });
         $tags.append(b);
     }
 }
 
-function render(){
+function render() {
     const list = applyFilters();
-
-    $feed.innerHTML='';
+    $feed.innerHTML = '';
 
     if (errorMsg) {
         const error = document.createElement('div');
@@ -220,19 +222,41 @@ function render(){
     }
 
     const fragment = document.createDocumentFragment();
-    for(const a of list){
+    for (const a of list) {
         const node = tpl.content.cloneNode(true);
+        
+        // Изображение
+        const cardImage = node.querySelector('.card-image');
+        if (a.image) {
+            cardImage.src = a.image;
+            cardImage.alt = a.title;
+            cardImage.style.display = 'block';
+        } else {
+            cardImage.style.display = 'none';
+        }
+        
+        // Заголовок
         node.querySelector('.title').textContent = a.title;
+        
+        // Описание
         node.querySelector('.desc').textContent = a.desc;
+        
+        // Дата и источник
         node.querySelector('.date').textContent = a.date ? new Date(a.date).toLocaleDateString('ru-RU') : '';
-        node.querySelector('.source').textContent = a.source;
-        node.querySelector('.read').href = `article.html?id=${a.id}`;
+        node.querySelector('.source').textContent = a.source || 'Неизвестный источник';
+        
+        // Кнопка "Читать" теперь ведёт на оригинальный сайт статьи
+        const readBtn = node.querySelector('.read');
+        readBtn.href = a.url;
+        readBtn.target = '_blank';
+        readBtn.rel = 'noopener noreferrer';
 
+        // Теги
         const tags = node.querySelector('.taglist');
         tags.innerHTML = '';
-        for(const t of a.tags){
+        for (const t of a.tags) {
             const pill = document.createElement('span');
-            pill.className='tagpill';
+            pill.className = 'tagpill';
             pill.textContent = t;
             tags.append(pill);
         }
@@ -244,18 +268,18 @@ function render(){
     updateStatus();
 }
 
-// ========== UI Events ==========
+// ============================
+//  UI EVENTS
+// ============================
 let searchTimer;
-$q.addEventListener('input', (e)=>{
+$q.addEventListener('input', (e) => {
     query = e.target.value.trim();
     hasMore = true;
     clearTimeout(searchTimer);
-    searchTimer = setTimeout(()=>{
-        fetchNews({ reset: true });
-    }, 350);
+    searchTimer = setTimeout(() => fetchNews({ reset: true }), 350);
 });
 
-$sort.addEventListener('change', (e)=>{
+$sort.addEventListener('change', (e) => {
     sort = e.target.value;
     render();
 });

@@ -20,7 +20,6 @@
         <div id="tags" class="tags"></div>
         <section id="feed" class="grid"></section>
         <footer class="pager">
-            <div id="pageInfo" class="status">Загружаем...</div>
             <div id="loader" class="loader hidden" aria-hidden="true">
                 <span></span><span></span><span></span>
             </div>
@@ -30,9 +29,9 @@
 
     <template id="cardTpl">
         <article class="card">
+            <img class="card-image" alt="" />
             <div class="card-head">
                 <h3 class="title"></h3>
-                <button class="bookmark" title="В закладки">☆</button>
             </div>
             <p class="desc"></p>
             <div class="meta"><span class="date"></span> · <span class="source"></span></div>
